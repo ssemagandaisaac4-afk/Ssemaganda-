@@ -1,0 +1,6 @@
+{
+  "name": "Archery AI Hub",
+  "description": "Smart Automated Yields & Yield Optimization Platform with mobile wallet deposits, daily returns, and member earnings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
