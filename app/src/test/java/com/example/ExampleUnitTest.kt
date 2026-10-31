@@ -47,4 +47,11 @@ class ExampleUnitTest {
         assertEquals("+256770000000", normalizePhone("256770000000"))
         assertEquals("+256770000000", normalizePhone("770000000"))
     }
+
+    @Test
+    fun adminMasterPin_validation() {
+        val masterPin = com.example.ui.MainViewModel.MASTER_ADMIN_PIN
+        assertEquals("99220", masterPin)
+        assertTrue(masterPin.length == 5)
+    }
 }

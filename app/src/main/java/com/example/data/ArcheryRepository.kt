@@ -136,7 +136,7 @@ class ArcheryRepository(context: Context) {
     private fun loadFromPrefs() {
         val usersJsonStr = prefs.getString("users_json", null)
         val requestsJsonStr = prefs.getString("requests_json", null)
-        val currentPhone = prefs.getString("current_phone", "+256770000000")
+        val currentPhone = prefs.getString("current_phone", null)
 
         if (usersJsonStr != null) {
             try {
@@ -591,7 +591,7 @@ class ArcheryRepository(context: Context) {
     fun resetToDefault() {
         _users.value = getDefaultUsers()
         _requests.value = getDefaultRequests()
-        _currentUserPhone.value = "+256770000000"
+        _currentUserPhone.value = null
         saveToPrefs()
     }
 }

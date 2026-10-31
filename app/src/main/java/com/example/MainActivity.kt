@@ -6,9 +6,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,39 +24,53 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.PlatformMode
 import com.example.model.ScreenTab
+import com.example.model.User
 import com.example.ui.MainViewModel
 import com.example.ui.components.AppLogoIcon
 import com.example.ui.screens.AdminScreen
@@ -105,6 +116,9 @@ fun ArcheryApp(viewModel: MainViewModel) {
     val users by viewModel.users.collectAsState()
     val snackbarMsg by viewModel.snackbarMessage.collectAsState()
 
+    var showAdminAuthDialog by remember { mutableStateOf(false) }
+    var adminPinInput by remember { mutableStateOf("") }
+
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(snackbarMsg) {
@@ -115,9 +129,9 @@ fun ArcheryApp(viewModel: MainViewModel) {
     }
 
     // Handle Back Press
-    BackHandler(enabled = currentUser != null && (platformMode == PlatformMode.ADMIN || currentTab != ScreenTab.DASHBOARD)) {
+    BackHandler(enabled = platformMode == PlatformMode.ADMIN || (currentUser != null && currentTab != ScreenTab.DASHBOARD)) {
         if (platformMode == PlatformMode.ADMIN) {
-            viewModel.setPlatformMode(PlatformMode.CLIENT)
+            viewModel.lockAdmin()
         } else {
             viewModel.setTab(ScreenTab.DASHBOARD)
         }
@@ -143,10 +157,15 @@ fun ArcheryApp(viewModel: MainViewModel) {
             }
         },
         topBar = {
-            if (currentUser != null) {
+            if (currentUser != null || platformMode == PlatformMode.ADMIN) {
                 MainAppTopBar(
                     platformMode = platformMode,
-                    onSwitchMode = { viewModel.setPlatformMode(it) },
+                    currentUser = currentUser,
+                    onRequestAdminUnlock = {
+                        adminPinInput = ""
+                        showAdminAuthDialog = true
+                    },
+                    onExitAdmin = { viewModel.lockAdmin() },
                     onLogout = { viewModel.logout() }
                 )
             }
@@ -165,71 +184,148 @@ fun ArcheryApp(viewModel: MainViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            val user = currentUser
-            if (user == null) {
-                AuthScreen(
-                    onLogin = { phone, pin -> viewModel.login(phone, pin) },
-                    onRegister = { phone, pin, refCode -> viewModel.register(phone, pin, refCode) }
+            if (platformMode == PlatformMode.ADMIN) {
+                AdminScreen(
+                    requests = requests,
+                    users = users,
+                    onApproveRequest = { viewModel.adminApproveRequest(it) },
+                    onRejectRequest = { viewModel.adminRejectRequest(it) },
+                    onFixBalance = { phone, bal -> viewModel.adminFixBalance(phone, bal) },
+                    onResetData = { viewModel.resetMockData() }
                 )
             } else {
-                when (platformMode) {
-                    PlatformMode.ADMIN -> {
-                        AdminScreen(
-                            requests = requests,
-                            users = users,
-                            onApproveRequest = { viewModel.adminApproveRequest(it) },
-                            onRejectRequest = { viewModel.adminRejectRequest(it) },
-                            onFixBalance = { phone, bal -> viewModel.adminFixBalance(phone, bal) },
-                            onResetData = { viewModel.resetMockData() }
+                val user = currentUser
+                if (user == null) {
+                    AuthScreen(
+                        onLogin = { phone, pin -> viewModel.login(phone, pin) },
+                        onRegister = { phone, pin, refCode -> viewModel.register(phone, pin, refCode) },
+                        onUnlockAdmin = { viewModel.unlockAdmin(it) }
+                    )
+                } else {
+                    when (currentTab) {
+                        ScreenTab.DASHBOARD -> DashboardScreen(
+                            user = user,
+                            onNavigateTab = { viewModel.setTab(it) },
+                            onSimulateMidnightPayout = { viewModel.simulateMidnightPayout() }
                         )
-                    }
-                    PlatformMode.CLIENT -> {
-                        when (currentTab) {
-                            ScreenTab.DASHBOARD -> DashboardScreen(
-                                user = user,
-                                onNavigateTab = { viewModel.setTab(it) },
-                                onSimulateMidnightPayout = { viewModel.simulateMidnightPayout() }
-                            )
-                            ScreenTab.PACKAGES -> PackagesScreen(
-                                user = user,
-                                plans = viewModel.packagePlans,
-                                onBuyPackage = { viewModel.buyPackage(it) },
-                                onNavigateToDeposit = { viewModel.setTab(ScreenTab.WALLET) }
-                            )
-                            ScreenTab.WALLET -> WalletScreen(
-                                user = user,
-                                userRequests = requests.filter { it.phone == user.phone },
-                                onSubmitDeposit = { amount, provider, phone ->
-                                    viewModel.submitDeposit(amount, provider, phone)
-                                },
-                                onSubmitWithdrawal = { amount, provider, phone ->
-                                    viewModel.submitWithdrawal(amount, provider, phone)
-                                }
-                            )
-                            ScreenTab.REFERRALS -> ReferralScreen(
-                                user = user,
-                                onSimulateReferral = { viewModel.simulateReferral() },
-                                onShowToast = { viewModel.showToast(it) }
-                            )
-                        }
+                        ScreenTab.PACKAGES -> PackagesScreen(
+                            user = user,
+                            plans = viewModel.packagePlans,
+                            onBuyPackage = { viewModel.buyPackage(it) },
+                            onNavigateToDeposit = { viewModel.setTab(ScreenTab.WALLET) }
+                        )
+                        ScreenTab.WALLET -> WalletScreen(
+                            user = user,
+                            userRequests = requests.filter { it.phone == user.phone },
+                            onSubmitDeposit = { amount, provider, phone ->
+                                viewModel.submitDeposit(amount, provider, phone)
+                            },
+                            onSubmitWithdrawal = { amount, provider, phone ->
+                                viewModel.submitWithdrawal(amount, provider, phone)
+                            }
+                        )
+                        ScreenTab.REFERRALS -> ReferralScreen(
+                            user = user,
+                            onSimulateReferral = { viewModel.simulateReferral() },
+                            onShowToast = { viewModel.showToast(it) }
+                        )
                     }
                 }
             }
         }
+    }
+
+    // Admin Access Security Challenge Dialog
+    if (showAdminAuthDialog) {
+        AlertDialog(
+            onDismissRequest = { showAdminAuthDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = AccentRose,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Executive Admin Department",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Restricted to authorized executive administrators (ssemagandaisaac4@gmail.com).",
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = adminPinInput,
+                        onValueChange = { if (it.length <= 8) adminPinInput = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("admin_dialog_pin_input"),
+                        label = { Text("Master Admin Security PIN") },
+                        placeholder = { Text("Enter 5-digit master PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AccentRose,
+                            unfocusedBorderColor = DarkBorder,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = DarkSurface,
+                            unfocusedContainerColor = DarkSurface
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val success = viewModel.unlockAdmin(adminPinInput)
+                        if (success) {
+                            showAdminAuthDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentRoseDark),
+                    modifier = Modifier.testTag("verify_admin_pin_button")
+                ) {
+                    Text("Verify & Access", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAdminAuthDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = DarkSurfaceCard
+        )
     }
 }
 
 @Composable
 fun MainAppTopBar(
     platformMode: PlatformMode,
-    onSwitchMode: (PlatformMode) -> Unit,
+    currentUser: User?,
+    onRequestAdminUnlock: () -> Unit,
+    onExitAdmin: () -> Unit,
     onLogout: () -> Unit
 ) {
+    val isAdminMode = platformMode == PlatformMode.ADMIN
+    val isOwnerAccount = currentUser?.phone == "+256770000000"
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(DarkSurface.copy(alpha = 0.95f))
-            .border(1.dp, DarkBorder.copy(alpha = 0.5f))
+            .border(1.dp, if (isAdminMode) AccentRose.copy(alpha = 0.5f) else DarkBorder.copy(alpha = 0.5f))
             .statusBarsPadding()
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
@@ -254,77 +350,93 @@ fun MainAppTopBar(
                             modifier = Modifier
                                 .size(6.dp)
                                 .clip(CircleShape)
-                                .background(BrandGreenLight)
+                                .background(if (isAdminMode) AccentRose else BrandGreenLight)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "AI Yield Active",
+                            text = if (isAdminMode) "Super Admin Department" else "AI Yield Active",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium,
-                            color = BrandGreenLight
+                            color = if (isAdminMode) AccentRose else BrandGreenLight
                         )
                     }
                 }
             }
 
-            // Mode Toggle (Client vs Admin) & Logout
+            // Top Actions
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(DarkBackground)
-                        .border(1.dp, DarkBorder, RoundedCornerShape(12.dp))
-                        .padding(3.dp)
-                ) {
-                    Row {
+                if (isAdminMode) {
+                    // Admin Mode: Exit Admin Button
+                    ElevatedButton(
+                        onClick = onExitAdmin,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.elevatedButtonColors(
+                            containerColor = AccentRoseDark,
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier.testTag("exit_admin_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Exit Admin",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    // Public Client Mode: Member Badge (Admin button is HIDDEN from everyone)
+                    if (currentUser != null) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(9.dp))
-                                .background(if (platformMode == PlatformMode.CLIENT) BrandGreenDark else Color.Transparent)
-                                .clickable { onSwitchMode(PlatformMode.CLIENT) }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                                .testTag("top_mode_client"),
-                            contentAlignment = Alignment.Center
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(DarkBackground)
+                                .border(1.dp, DarkBorder, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
                         ) {
                             Text(
-                                text = "Client",
+                                text = currentUser.phone,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (platformMode == PlatformMode.CLIENT) Color.White else TextSecondary
+                                color = BrandGreenLight
                             )
                         }
 
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(9.dp))
-                                .background(if (platformMode == PlatformMode.ADMIN) AccentRoseDark else Color.Transparent)
-                                .clickable { onSwitchMode(PlatformMode.ADMIN) }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                                .testTag("top_mode_admin"),
-                            contentAlignment = Alignment.Center
+                        // Only if logged into the specific owner number, show discreet lock to enter admin
+                        if (isOwnerAccount) {
+                            IconButton(
+                                onClick = onRequestAdminUnlock,
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .testTag("admin_lock_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Admin Unlock",
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        IconButton(
+                            onClick = onLogout,
+                            modifier = Modifier.testTag("top_logout_button")
                         ) {
-                            Text(
-                                text = "Admin",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (platformMode == PlatformMode.ADMIN) Color.White else TextSecondary
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = "Sign Out",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                IconButton(
-                    onClick = onLogout,
-                    modifier = Modifier.testTag("top_logout_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Logout,
-                        contentDescription = "Sign Out",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
                 }
             }
         }

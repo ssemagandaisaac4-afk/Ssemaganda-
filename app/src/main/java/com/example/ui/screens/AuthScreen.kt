@@ -27,6 +27,9 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +37,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,6 +79,7 @@ import com.example.ui.theme.TextSecondary
 fun AuthScreen(
     onLogin: (String, String) -> Unit,
     onRegister: (String, String, String?) -> Unit,
+    onUnlockAdmin: (String) -> Boolean = { false },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -83,6 +88,8 @@ fun AuthScreen(
     var pinInput by remember { mutableStateOf("") }
     var refCodeInput by remember { mutableStateOf("") }
     var pinVisible by remember { mutableStateOf(false) }
+    var showAdminDialog by remember { mutableStateOf(false) }
+    var adminPinInput by remember { mutableStateOf("") }
 
     Box(
         modifier = modifier
@@ -439,6 +446,108 @@ fun AuthScreen(
                     }
                 )
             }
+
+            // Discreet Executive Admin Department Entry
+            Spacer(modifier = Modifier.height(18.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        adminPinInput = ""
+                        showAdminDialog = true
+                    }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .testTag("admin_portal_entrance")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = TextMuted,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Executive Admin Department",
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        // Admin Access Security Dialog
+        if (showAdminDialog) {
+            AlertDialog(
+                onDismissRequest = { showAdminDialog = false },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = Color(0xFFF43F5E),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Admin Department Access",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Restricted to authorized executive administrators (ssemagandaisaac4@gmail.com).",
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = adminPinInput,
+                            onValueChange = { if (it.length <= 8) adminPinInput = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("admin_secret_pin_input"),
+                            label = { Text("Master Admin Security PIN") },
+                            placeholder = { Text("Enter 5-digit master PIN") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFFF43F5E),
+                                unfocusedBorderColor = DarkBorder,
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedContainerColor = DarkSurface,
+                                unfocusedContainerColor = DarkSurface
+                            )
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val success = onUnlockAdmin(adminPinInput)
+                            if (success) {
+                                showAdminDialog = false
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48)),
+                        modifier = Modifier.testTag("admin_unlock_button")
+                    ) {
+                        Text("Verify & Unlock", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAdminDialog = false }) {
+                        Text("Cancel", color = TextSecondary)
+                    }
+                },
+                containerColor = DarkSurfaceCard
+            )
         }
     }
 }

@@ -37,6 +37,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _platformMode = MutableStateFlow(PlatformMode.CLIENT)
     val platformMode: StateFlow<PlatformMode> = _platformMode.asStateFlow()
 
+    private val _isAdminUnlocked = MutableStateFlow(false)
+    val isAdminUnlocked: StateFlow<Boolean> = _isAdminUnlocked.asStateFlow()
+
+    companion object {
+        const val MASTER_ADMIN_PIN = "99220"
+    }
+
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 
@@ -52,8 +59,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _currentTab.value = tab
     }
 
-    fun setPlatformMode(mode: PlatformMode) {
-        _platformMode.value = mode
+    fun unlockAdmin(pin: String): Boolean {
+        return if (pin.trim() == MASTER_ADMIN_PIN) {
+            _isAdminUnlocked.value = true
+            _platformMode.value = PlatformMode.ADMIN
+            _snackbarMessage.value = "Super Admin Access Granted"
+            true
+        } else {
+            _snackbarMessage.value = "Access Denied: Incorrect Admin Security PIN"
+            false
+        }
+    }
+
+    fun lockAdmin() {
+        _isAdminUnlocked.value = false
+        _platformMode.value = PlatformMode.CLIENT
+        _snackbarMessage.value = "Exited Admin Department"
     }
 
     fun login(phone: String, pin: String) {
@@ -86,6 +107,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() {
         repository.logout()
+        _isAdminUnlocked.value = false
         _platformMode.value = PlatformMode.CLIENT
         _currentTab.value = ScreenTab.DASHBOARD
         _snackbarMessage.value = "Signed out of Archery AI Hub"
